@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/Sangsty/replaygate/internal/diff"
 )
@@ -20,9 +21,14 @@ import (
 type Config struct {
 	FloatTolerance float64              `json:"float_tolerance"`
 	ArrayModes     map[string]ArrayMode `json:"array_modes"`
-	Latency        struct {
+	// Latency is judged per endpoint, not per request: the median candidate
+	// latency is compared with the median baseline latency, and only for
+	// endpoints with at least MinSamples replayed requests (default 5). One
+	// slow response proves nothing; a shifted median does.
+	Latency struct {
 		Ratio      float64 `json:"ratio"`
 		MinDeltaMS int     `json:"min_delta_ms"`
+		MinSamples int     `json:"min_samples"`
 	} `json:"latency"`
 	FailOn              []string `json:"fail_on"`
 	ValueChangeSeverity string   `json:"value_change_severity"`
@@ -66,7 +72,21 @@ func ParseConfig(raw []byte) (Config, error) {
 	if c.FloatTolerance < 0 {
 		return Config{}, fmt.Errorf("invalid diff config: float_tolerance must not be negative")
 	}
+	if c.Latency.MinSamples < 0 {
+		return Config{}, fmt.Errorf("invalid diff config: latency.min_samples must not be negative")
+	}
 	return c, nil
+}
+
+// DefaultLatencyMinSamples is how many replayed requests an endpoint needs
+// before its latency is judged.
+const DefaultLatencyMinSamples = 5
+
+func (c Config) latencyMinSamples() int {
+	if c.Latency.MinSamples > 0 {
+		return c.Latency.MinSamples
+	}
+	return DefaultLatencyMinSamples
 }
 
 // failOnSet returns the severities that fail a run. An empty list means the
@@ -91,9 +111,8 @@ func (c Config) diffConfig(extraIgnore []string) diff.Config {
 	dc := diff.Config{
 		FloatTolerance:      c.FloatTolerance,
 		ValueChangeSeverity: diff.Severity(c.ValueChangeSeverity),
-		LatencyFactor:       c.Latency.Ratio,
-		LatencyMinMS:        c.Latency.MinDeltaMS,
-		ArrayKeys:           map[string]string{},
+		// Latency is not judged per request: see Config.Latency and Analyze.
+		ArrayKeys: map[string]string{},
 	}
 	paths := make([]string, 0, len(c.ArrayModes))
 	for p := range c.ArrayModes {
@@ -152,7 +171,6 @@ type Result struct {
 func LearnNoise(obs []Observation, cfg Config) map[string][]string {
 	set := map[string]map[string]struct{}{}
 	base := cfg.diffConfig(nil)
-	base.LatencyFactor = 0 // latency jitter between A and B is not field noise
 	for _, o := range obs {
 		if o.A == nil || o.B == nil || o.A.Err != "" || o.B.Err != "" {
 			continue
@@ -185,6 +203,7 @@ func Analyze(obs []Observation, cfg Config) Result {
 		res.Noise = LearnNoise(obs, cfg)
 	}
 	failOn := cfg.failOnSet()
+	lat := map[string]*latencySamples{}
 
 	for _, o := range obs {
 		if o.A != nil {
@@ -199,21 +218,97 @@ func Analyze(obs []Observation, cfg Config) Result {
 		res.Compared++
 		dc := cfg.diffConfig(res.Noise[o.Endpoint])
 		for _, f := range diff.Compare(*o.A, *o.Candidate, dc) {
-			res.Findings = append(res.Findings, RequestFinding{RequestID: o.RequestID, Endpoint: o.Endpoint, Finding: f})
-			switch f.Severity {
-			case diff.Breaking:
-				res.Breaking++
-			case diff.Additive:
-				res.Additive++
-			case diff.Latency:
-				res.Latency++
+			res.add(RequestFinding{RequestID: o.RequestID, Endpoint: o.Endpoint, Finding: f}, failOn)
+		}
+		if o.A.Err == "" && o.Candidate.Err == "" {
+			ls := lat[o.Endpoint]
+			if ls == nil {
+				ls = &latencySamples{}
+				lat[o.Endpoint] = ls
 			}
-			if failOn[f.Severity] {
-				res.Passed = false
+			ls.add(o)
+		}
+	}
+
+	// One latency finding per endpoint, in a stable order.
+	if cfg.Latency.Ratio > 0 {
+		endpoints := make([]string, 0, len(lat))
+		for ep := range lat {
+			endpoints = append(endpoints, ep)
+		}
+		sort.Strings(endpoints)
+		for _, ep := range endpoints {
+			if f, ok := lat[ep].finding(cfg); ok {
+				res.add(RequestFinding{RequestID: lat[ep].slowestID, Endpoint: ep, Finding: f}, failOn)
 			}
 		}
 	}
 	return res
+}
+
+// add records a finding and updates the counts and the verdict.
+func (r *Result) add(f RequestFinding, failOn map[diff.Severity]bool) {
+	r.Findings = append(r.Findings, f)
+	switch f.Severity {
+	case diff.Breaking:
+		r.Breaking++
+	case diff.Additive:
+		r.Additive++
+	case diff.Latency:
+		r.Latency++
+	}
+	if failOn[f.Severity] {
+		r.Passed = false
+	}
+}
+
+// latencySamples collects the latencies of one endpoint. Both baseline replays
+// count as baseline samples, which doubles the baseline's sample size.
+type latencySamples struct {
+	base, cand []int
+	slowestID  int64 // the request with the slowest candidate response, for drill-down
+	slowestMS  int
+}
+
+func (l *latencySamples) add(o Observation) {
+	l.base = append(l.base, o.A.LatencyMS)
+	if o.B != nil && o.B.Err == "" {
+		l.base = append(l.base, o.B.LatencyMS)
+	}
+	l.cand = append(l.cand, o.Candidate.LatencyMS)
+	if len(l.cand) == 1 || o.Candidate.LatencyMS > l.slowestMS {
+		l.slowestMS, l.slowestID = o.Candidate.LatencyMS, o.RequestID
+	}
+}
+
+// finding reports a regression when the candidate's median latency exceeds the
+// baseline's median by both the ratio and the absolute minimum, and enough
+// requests were replayed to trust a median.
+func (l *latencySamples) finding(cfg Config) (diff.Finding, bool) {
+	if len(l.cand) < cfg.latencyMinSamples() {
+		return diff.Finding{}, false
+	}
+	mb, mc := median(l.base), median(l.cand)
+	if mb <= 0 || float64(mc) <= float64(mb)*cfg.Latency.Ratio || mc-mb <= cfg.Latency.MinDeltaMS {
+		return diff.Finding{}, false
+	}
+	return diff.Finding{
+		Severity: diff.Latency, Kind: diff.LatencyRegression,
+		Baseline:  json.RawMessage(strconv.Itoa(mb)),
+		Candidate: json.RawMessage(strconv.Itoa(mc)),
+	}, true
+}
+
+// median of a non-empty list; the mean of the two middle values (rounded down)
+// for an even count. It does not modify its argument.
+func median(v []int) int {
+	s := append([]int(nil), v...)
+	sort.Ints(s)
+	n := len(s)
+	if n%2 == 1 {
+		return s[n/2]
+	}
+	return (s[n/2-1] + s[n/2]) / 2
 }
 
 // BaselineUnhealthy reports whether the run cannot be trusted because the

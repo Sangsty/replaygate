@@ -1,6 +1,6 @@
 {
   "env": {
-    "when": "2026-11-20T11:25:02.081552082Z",
+    "when": "2026-11-20T16:23:16.955846775Z",
     "go": "go1.24.7",
     "os": "linux",
     "arch": "amd64",
@@ -263,7 +263,7 @@
       "errored": 0,
       "ci95_low": 0.9286523998213858,
       "ci95_high": 0.9999999999999998,
-      "mean_breaking_per_run": 269.14,
+      "mean_breaking_per_run": 269.26,
       "mean_latency_per_run": 0,
       "runs_with_latency_findings": 0
     },
@@ -285,11 +285,11 @@
       "noise_learning": true,
       "rare_noise": 0.01,
       "runs": 50,
-      "failed": 4,
+      "failed": 7,
       "errored": 0,
-      "ci95_low": 0.03154951386931146,
-      "ci95_high": 0.1883824702807244,
-      "mean_breaking_per_run": 0.08,
+      "ci95_low": 0.0695083338917044,
+      "ci95_high": 0.2618619382368978,
+      "mean_breaking_per_run": 0.14,
       "mean_latency_per_run": 0,
       "runs_with_latency_findings": 0
     }
@@ -298,10 +298,10 @@
     {
       "requests": 1000,
       "replays": 3000,
-      "total_ns": 1565260727,
-      "replay_ns": 1437105570,
-      "diff_ns": 128155157,
-      "replays_per_second": 1916.6136019715007,
+      "total_ns": 1615987828,
+      "replay_ns": 1471832804,
+      "diff_ns": 144155024,
+      "replays_per_second": 1856.449626673797,
       "verdict": "passed",
       "breaking": 0,
       "latency_findings": 0
@@ -309,10 +309,10 @@
     {
       "requests": 10000,
       "replays": 30000,
-      "total_ns": 13589119222,
-      "replay_ns": 12781533053,
-      "diff_ns": 807586169,
-      "replays_per_second": 2207.6485981101505,
+      "total_ns": 15449363276,
+      "replay_ns": 14571955944,
+      "diff_ns": 877407332,
+      "replays_per_second": 1941.8275992385954,
       "verdict": "passed",
       "breaking": 0,
       "latency_findings": 0

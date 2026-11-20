@@ -26,4 +26,10 @@ class H(http.server.BaseHTTPRequestHandler):
         out = json.dumps(body).encode()
         self.send_response(status); self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(out))); self.end_headers(); self.wfile.write(out)
-http.server.ThreadingHTTPServer(('127.0.0.1', port), H).serve_forever()
+class Server(http.server.ThreadingHTTPServer):
+    # The default listen backlog is 5: a burst of concurrent replays overflows it
+    # and the OS retries the dropped connections after a full second, which
+    # shows up as bogus latency regressions.
+    request_queue_size = 128
+
+Server(('127.0.0.1', port), H).serve_forever()

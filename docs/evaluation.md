@@ -46,9 +46,9 @@ The same build is replayed as baseline and as candidate, so any failed check is 
 
 | Setting | False alarms | Rate (95% interval) | Breaking findings per check | Checks with a latency finding |
 |---|---|---|---|---|
-| noise learning off | 50/50 | 100% (92.9%–100.0%) | 269.14 | 0/50 |
+| noise learning off | 50/50 | 100% (92.9%–100.0%) | 269.26 | 0/50 |
 | noise learning on | 0/50 | 0% (0.0%–7.1%) | 0.00 | 0/50 |
-| noise learning on, plus a field that flips 1.0% of the time | 4/50 | 8% (3.2%–18.8%) | 0.08 | 0/50 |
+| noise learning on, plus a field that flips 1.0% of the time | 7/50 | 14% (7.0%–26.2%) | 0.14 | 0/50 |
 
 ## 3. Throughput
 
@@ -56,8 +56,8 @@ A clean check of N recorded requests replays each one three times (baseline twic
 
 | Recorded requests | Requests replayed | Total | Replay | Diff | Replays per second | Latency findings | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1000 | 3000 | 1.6 s | 1.4 s | 0.1 s | 1917 | 0 | PASSED |
-| 10000 | 30000 | 13.6 s | 12.8 s | 0.8 s | 2208 | 0 | PASSED |
+| 1000 | 3000 | 1.6 s | 1.5 s | 0.1 s | 1856 | 0 | PASSED |
+| 10000 | 30000 | 15.4 s | 14.6 s | 0.9 s | 1942 | 0 | PASSED |
 
 ## Limits of these numbers
 
@@ -65,6 +65,6 @@ A clean check of N recorded requests replays each one three times (baseline twic
 - Noise is of two kinds only: values that change on every call, and one field that flips rarely. Noise that depends on request order, load or time of day is not modelled.
 - Everything shares one machine, and the services answer from memory over localhost, so network latency and slow downstream calls are not included. Real throughput is bounded by how fast the services under test respond.
 - The diff worker polls every 20ms here; the API's production default is 1 s, which adds up to a second to every check.
-- Latency findings compare a single sample per request, so they are noisy; they are reported but never fail a check by default.
+- Latency is judged per endpoint: the median candidate latency against the median baseline latency, only for endpoints with at least 5 replayed requests, so a single slow response is not a finding. Latency findings are reported but never fail a check by default, and the services here answer from memory, so real-world latency noise is not exercised.
 
 Reproduce: `make eval` (needs the Postgres from `make up`).

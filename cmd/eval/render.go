@@ -111,7 +111,7 @@ func (r Results) Markdown(w io.Writer) {
 	p("- Noise is of two kinds only: values that change on every call, and one field that flips rarely. Noise that depends on request order, load or time of day is not modelled.")
 	p("- Everything shares one machine, and the services answer from memory over localhost, so network latency and slow downstream calls are not included. Real throughput is bounded by how fast the services under test respond.")
 	p("- The diff worker polls every %s here; the API's production default is 1 s, which adds up to a second to every check.", diffPoll)
-	p("- Latency findings compare a single sample per request, so they are noisy; they are reported but never fail a check by default.")
+	p("- Latency is judged per endpoint: the median candidate latency against the median baseline latency, only for endpoints with at least 5 replayed requests, so a single slow response is not a finding. Latency findings are reported but never fail a check by default, and the services here answer from memory, so real-world latency noise is not exercised.")
 	p("")
 	p("Reproduce: `make eval` (needs the Postgres from `make up`).")
 }
