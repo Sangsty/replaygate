@@ -42,6 +42,19 @@ services under test stay on the CI runner and are never uploaded.
 
 > Status: Phase 4 (evaluation in `docs/evaluation.md`, deployment in `deploy/README.md`).
 
+## Demo
+
+A pull request that drops a field from `/users/{id}` fails the check, and the
+Action comments on the PR with what changed
+([the live PR](https://github.com/Sangsty/replaygate-demo-service/pull/1)):
+
+![The pull request comment: one breaking change, field removed on /users/{id}](docs/images/pr-comment.png)
+
+The same run in the dashboard, with findings grouped by severity and the fields
+learned as noise collapsed at the bottom:
+
+![The dashboard run page: three breaking changes, four additive, one latency](docs/images/dashboard-run.png)
+
 ## Quick start
 
 ```bash
