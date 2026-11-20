@@ -4,6 +4,8 @@
 //
 //	api serve                   run migrations, then serve the API (default)
 //	api bootstrap -name demo    create a dev project and print its API key once
+//	api bootstrap -name demo -owner octocat
+//	                            ...and let the GitHub user octocat open it in the dashboard
 package main
 
 import (
@@ -75,9 +77,21 @@ func serve(log *slog.Logger) error {
 	dw := &diffworker.Worker{Store: st, Log: log, ID: fmt.Sprintf("api-%d", os.Getpid())}
 	go dw.Run(ctx)
 
+	var opts []server.Option
+	authCfg, err := authFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if authCfg != nil {
+		opts = append(opts, server.WithAuth(*authCfg))
+		log.Info("dashboard sign-in enabled", "callback", authCfg.OAuth.RedirectURL)
+	} else {
+		log.Warn("dashboard sign-in is disabled: set RG_GITHUB_CLIENT_ID, RG_GITHUB_CLIENT_SECRET, RG_JWT_SECRET and RG_PUBLIC_URL to enable it")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(st, log),
+		Handler:           server.New(st, log, opts...),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -103,12 +117,13 @@ func serve(log *slog.Logger) error {
 	}
 }
 
-// bootstrap creates a project owned by a local development user and prints a
-// fresh API key. It exists so the recorder can be used before GitHub login is
-// built (week 3); real users will own their projects through OAuth.
+// bootstrap creates a project and prints a fresh API key. There is no sign-up
+// flow: an operator creates projects here and names, with -owner, the GitHub
+// user who may open the project in the dashboard.
 func bootstrap(args []string) error {
 	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
 	name := fs.String("name", "demo", "project name")
+	owner := fs.String("owner", "", "GitHub login of the person who may open the project in the dashboard")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -132,16 +147,21 @@ func bootstrap(args []string) error {
 	}
 
 	// GitHub user ids start at 1, so id 0 can never collide with a real user.
-	owner, err := st.UpsertUser(ctx, 0, "bootstrap")
+	bootUser, err := st.UpsertUser(ctx, 0, "bootstrap")
 	if err != nil {
 		return err
 	}
-	project, err := st.CreateProject(ctx, owner, *name)
+	project, err := st.CreateProject(ctx, bootUser, *name)
 	if errors.Is(err, store.ErrConflict) {
 		return fmt.Errorf("project %q already exists; pick another with -name", *name)
 	}
 	if err != nil {
 		return err
+	}
+	if *owner != "" {
+		if err := st.AddProjectMember(ctx, project.ID, *owner); err != nil {
+			return err
+		}
 	}
 	key, err := st.CreateAPIKey(ctx, project.ID, "bootstrap")
 	if err != nil {
@@ -153,5 +173,8 @@ func bootstrap(args []string) error {
 	fmt.Printf("RG_PROJECT_ID=%s\n", project.ID)
 	fmt.Printf("RG_API_KEY=%s\n\n", key)
 	fmt.Println("Save the key now. Only its hash is stored, so it cannot be shown again.")
+	if *owner != "" {
+		fmt.Printf("GitHub user %q can open this project in the dashboard after signing in.\n", *owner)
+	}
 	return nil
 }

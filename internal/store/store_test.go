@@ -85,8 +85,12 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if err := s.Pool().QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Errorf("schema_migrations rows = %d, want 1", n)
+	files, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(files) { // one row per migration file, however many there are
+		t.Errorf("schema_migrations rows = %d, want %d", n, len(files))
 	}
 }
 

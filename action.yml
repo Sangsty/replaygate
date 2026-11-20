@@ -1,0 +1,105 @@
+name: Replay Gate
+description: >
+  Replays recorded API traffic against the main branch and this pull request,
+  and fails the check when a response changes in a breaking way.
+author: Sangsty
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  api-url:
+    description: Address of your replaygate API, e.g. https://replaygate.example.com
+    required: true
+  project-id:
+    description: Project id printed by `bootstrap`
+    required: true
+  api-key:
+    description: Project API key. Store it in a repository secret.
+    required: true
+  baseline-url:
+    description: Where the main-branch build is already running, e.g. http://localhost:3001
+    required: true
+  candidate-url:
+    description: Where the pull request build is already running, e.g. http://localhost:3002
+    required: true
+  replay-auth:
+    description: >
+      Authorization header value the apps expect, e.g. "Bearer <token>".
+      Used for replay only; never uploaded or stored. Store it in a secret.
+    required: false
+    default: ""
+  sample-size:
+    description: How many of the most frequently seen requests to replay
+    required: false
+    default: "1000"
+  noise-learning:
+    description: Replay the baseline twice and ignore fields that differ between the runs
+    required: false
+    default: "true"
+  timeout:
+    description: How long to wait for the verdict
+    required: false
+    default: "15m"
+  dashboard-url:
+    description: Address of the dashboard, to link the comment to the run. Optional.
+    required: false
+    default: ""
+  comment:
+    description: Post the report as a pull request comment
+    required: false
+    default: "true"
+  github-token:
+    description: Token used to post the comment. The workflow needs `pull-requests: write`.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  verdict:
+    description: passed, failed or errored
+    value: ${{ steps.gate.outputs.verdict }}
+  run-id:
+    description: The replaygate run id
+    value: ${{ steps.gate.outputs.run-id }}
+  breaking-count:
+    description: Number of breaking findings
+    value: ${{ steps.gate.outputs.breaking-count }}
+  additive-count:
+    description: Number of additive findings
+    value: ${{ steps.gate.outputs.additive-count }}
+
+runs:
+  using: composite
+  steps:
+    # The tool is built from source for now. This installs Go next to whatever
+    # the workflow already uses; a prebuilt binary download replaces it later.
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: false
+
+    - name: Build replaygate
+      shell: bash
+      run: go build -C "$ACTION_PATH" -trimpath -o "$RUNNER_TEMP/replaygate" ./cmd/replaygate
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+
+    - name: Run the replay gate
+      id: gate
+      shell: bash
+      # Inputs reach the program through the environment, never by being pasted
+      # into the script, so a crafted input cannot inject shell commands.
+      run: '"$RUNNER_TEMP/replaygate" run'
+      env:
+        RG_API_URL: ${{ inputs.api-url }}
+        RG_PROJECT_ID: ${{ inputs.project-id }}
+        RG_API_KEY: ${{ inputs.api-key }}
+        RG_BASELINE_URL: ${{ inputs.baseline-url }}
+        RG_CANDIDATE_URL: ${{ inputs.candidate-url }}
+        RG_REPLAY_AUTH: ${{ inputs.replay-auth }}
+        RG_SAMPLE_SIZE: ${{ inputs.sample-size }}
+        RG_NOISE_LEARNING: ${{ inputs.noise-learning }}
+        RG_TIMEOUT: ${{ inputs.timeout }}
+        RG_DASHBOARD_URL: ${{ inputs.dashboard-url }}
+        RG_COMMENT: ${{ inputs.comment }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}

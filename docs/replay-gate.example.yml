@@ -1,0 +1,55 @@
+# Example: gate every pull request with replaygate.
+# Copy to .github/workflows/replay-gate.yml in YOUR service's repository and
+# adapt the two "start" steps to how your service runs.
+#
+# One-time setup in your repository:
+#   Secrets:    REPLAYGATE_API_KEY, and REPLAYGATE_REPLAY_AUTH if your API needs auth
+#   Variables:  REPLAYGATE_API_URL, REPLAYGATE_PROJECT_ID
+#
+# Pull requests from forks do not receive secrets, so the check cannot run for them.
+name: replay-gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write # to post the report comment
+
+jobs:
+  replay-gate:
+    runs-on: ubuntu-latest
+    steps:
+      # The two builds under comparison, side by side.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }} # the baseline: what main does today
+          path: baseline
+      - uses: actions/checkout@v4
+        with:
+          path: candidate # the pull request
+
+      # --- Replace these with however your service starts. -------------------
+      - name: Start the baseline on :3001
+        working-directory: baseline
+        run: |
+          PORT=3001 nohup ./run-server.sh > "$RUNNER_TEMP/baseline.log" 2>&1 &
+      - name: Start the candidate on :3002
+        working-directory: candidate
+        run: |
+          PORT=3002 nohup ./run-server.sh > "$RUNNER_TEMP/candidate.log" 2>&1 &
+      - name: Wait until both answer
+        run: |
+          for port in 3001 3002; do
+            for i in $(seq 1 30); do curl -fs "http://localhost:$port/healthz" >/dev/null && break; sleep 1; done
+          done
+      # ------------------------------------------------------------------------
+
+      - uses: Sangsty/replaygate@main # pin a tag or commit SHA for stability
+        with:
+          api-url: ${{ vars.REPLAYGATE_API_URL }}
+          project-id: ${{ vars.REPLAYGATE_PROJECT_ID }}
+          api-key: ${{ secrets.REPLAYGATE_API_KEY }}
+          baseline-url: http://localhost:3001
+          candidate-url: http://localhost:3002
+          replay-auth: ${{ secrets.REPLAYGATE_REPLAY_AUTH }}

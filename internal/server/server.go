@@ -40,16 +40,31 @@ type Store interface {
 	ClaimReplayJob(ctx context.Context, projectID, variant, workerID string, lease time.Duration) (*store.ReplayJob, error)
 	CompleteReplayJob(ctx context.Context, projectID string, jobID int64, workerID string, results []store.ReplayResult) error
 	FailReplayJob(ctx context.Context, projectID string, jobID int64, workerID, msg string) (bool, error)
+
+	// Dashboard: what signed-in users read.
+	UpsertUser(ctx context.Context, githubID int64, login string) (userID string, err error)
+	ProjectsForUser(ctx context.Context, userID, login string) ([]store.ProjectSummary, error)
+	CanAccessProject(ctx context.Context, projectID, userID, login string) (bool, error)
+	ListRuns(ctx context.Context, projectID string, limit int) ([]store.Run, error)
+	RunNoise(ctx context.Context, runID string) ([]store.NoiseField, error)
+	RunRequestDetail(ctx context.Context, projectID, runID string, requestID int64) (store.RequestDetail, error)
 }
 
 type api struct {
 	store Store
 	log   *slog.Logger
+	auth  *AuthConfig // nil: dashboard sign-in is not configured
 }
 
+// Option customises the API.
+type Option func(*api)
+
 // New returns the API handler.
-func New(st Store, log *slog.Logger) http.Handler {
+func New(st Store, log *slog.Logger, opts ...Option) http.Handler {
 	a := &api{store: st, log: log}
+	for _, o := range opts {
+		o(a)
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -58,17 +73,37 @@ func New(st Store, log *slog.Logger) http.Handler {
 
 	r.Get("/healthz", a.healthz)
 
+	// Dashboard sign-in. The routes exist only when sign-in is configured.
+	if a.auth != nil {
+		r.Get("/auth/github/login", a.githubLogin)
+		r.Get("/auth/github/callback", a.githubCallback)
+		r.Post("/auth/logout", a.logout)
+	}
+	r.Get("/v1/me", a.me)
+	r.Get("/v1/projects", a.listProjects)
+
 	r.Route("/v1/projects/{pid}", func(r chi.Router) {
-		r.Use(a.requireProjectKey)
-		r.Get("/config", a.getConfig)
-		r.Post("/ingest", a.ingest)
+		// Machines (CI, the recorder, replay workers) authenticate with the
+		// project's API key, and only they may write.
+		r.Group(func(r chi.Router) {
+			r.Use(a.requireProjectKey)
+			r.Get("/config", a.getConfig)
+			r.Post("/ingest", a.ingest)
 
-		r.Post("/runs", a.createRun)
-		r.Get("/runs/{rid}", a.getRun)
+			r.Post("/runs", a.createRun)
 
-		r.Post("/jobs/claim", a.claimJob)
-		r.Post("/jobs/{jid}/complete", a.completeJob)
-		r.Post("/jobs/{jid}/fail", a.failJob)
+			r.Post("/jobs/claim", a.claimJob)
+			r.Post("/jobs/{jid}/complete", a.completeJob)
+			r.Post("/jobs/{jid}/fail", a.failJob)
+		})
+		// Reading results works with the API key (the CLI polls with it) or
+		// with a dashboard session of a project member.
+		r.Group(func(r chi.Router) {
+			r.Use(a.requireKeyOrSession)
+			r.Get("/runs", a.listRuns)
+			r.Get("/runs/{rid}", a.getRun)
+			r.Get("/runs/{rid}/requests/{reqid}", a.getRunRequest)
+		})
 	})
 	return r
 }

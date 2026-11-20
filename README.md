@@ -5,8 +5,8 @@ proxy, replay it against the baseline (main) and candidate (PR) builds, diff
 the responses, and fail the pull request with a readable report when a
 breaking change is found.
 
-> Status: Phase 2 (replay workers, job queue, diff engine, noise learning).
-> The GitHub Action, PR comments, auth and dashboard follow in later phases.
+> Status: Phase 3 (GitHub Action and CLI, PR comments, GitHub sign-in, dashboard).
+> Evaluation, benchmarks, deployment and the architecture write-up follow in Phase 4.
 
 ## Quick start
 
@@ -54,3 +54,62 @@ curl -s -H "Authorization: Bearer $RG_API_KEY" \
 Replay credentials for the target go in `RG_REPLAY_AUTH` on the worker (for
 example `Bearer <token>`). They stay in that process and are never uploaded.
 A run is `errored`, not `passed`, when the baseline did not answer.
+
+## Phase 3: GitHub Action, dashboard
+
+### Gate a pull request
+
+`replaygate run` does a whole check from one command: it creates a run, replays
+the recorded traffic against both builds, waits for the verdict, prints a
+summary, writes the job summary, and posts (or edits) one comment on the pull
+request. The GitHub Action wraps it. See `docs/replay-gate.example.yml` for a
+complete workflow; the heart of it is:
+
+```yaml
+- uses: Sangsty/replaygate@main
+  with:
+    api-url: ${{ vars.REPLAYGATE_API_URL }}
+    project-id: ${{ vars.REPLAYGATE_PROJECT_ID }}
+    api-key: ${{ secrets.REPLAYGATE_API_KEY }}
+    baseline-url: http://localhost:3001   # main branch build, already running
+    candidate-url: http://localhost:3002  # PR build, already running
+```
+
+Exit status: `0` passed, `1` a regression was found, `2` no verdict (bad
+configuration, API unreachable, baseline did not answer, timeout). An `errored`
+run never shows as a pass. Failing to post the comment is a warning, not a
+failure. Pull requests from forks get no secrets from GitHub, so the check
+cannot run for them; that is GitHub's rule, not a limit of this tool.
+
+Try the whole thing locally, with seeded bugs and no GitHub:
+
+```bash
+make up && bash scripts/e2e.sh
+```
+
+### Dashboard
+
+Sign in with GitHub, open a project, see its runs, and click any finding to see
+the baseline and PR responses side by side. Fields the run learned to ignore are
+greyed out, so a visible difference that is not a finding is explained.
+
+1. Create a GitHub OAuth app (Settings, Developer settings, OAuth Apps). For
+   local use the homepage is `http://localhost:5173` and the callback URL is
+   `http://localhost:5173/auth/github/callback`.
+2. Put the client id and secret in `.env`, plus `RG_JWT_SECRET`
+   (`openssl rand -base64 48`) and `RG_PUBLIC_URL`. See `.env.example`.
+3. Give yourself access, then start everything:
+
+```bash
+make bootstrap NAME=my-service OWNER=<your-github-login>   # prints the project id and API key
+make api                  # terminal 1
+make web-install          # first time only
+make web-dev              # terminal 2, http://localhost:5173
+```
+
+Access: you can open a project if you own it or if `bootstrap -owner` (or a row
+in `project_members`) names your GitHub login. Sessions are a signed JWT in an
+HttpOnly, SameSite=Lax cookie, valid for 24 hours, and can only read. Every
+write endpoint requires the project API key.
+
+Checks: `make web-test` (types and unit tests), `make web-build`.

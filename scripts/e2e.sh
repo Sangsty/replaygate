@@ -21,7 +21,7 @@ cleanup() { kill "${pids[@]}" 2>/dev/null; wait 2>/dev/null; rm -rf "$TMP"; }
 trap cleanup EXIT
 
 echo "building..."
-for b in api proxy worker; do go build -o "$TMP/$b" "./cmd/$b" || exit 1; done
+for b in api proxy worker replaygate; do go build -o "$TMP/$b" "./cmd/$b" || exit 1; done
 psql_ -d postgres -qc 'DROP DATABASE IF EXISTS rg_e2e' -c 'CREATE DATABASE rg_e2e' 2>&1 | grep -v NOTICE
 
 cd "$TMP"   # no .env here, so only the variables set below apply
@@ -68,14 +68,41 @@ for x in d["diffs"]:
     print("  %-8s %-14s %-13s %-12s %s -> %s" % (x["severity"], x["kind"], x["endpoint"], x["json_path"], x.get("baseline_value"), x.get("candidate_value")))'
   psql_ -U "${POSTGRES_USER:-replaygate}" -d rg_e2e -Atc "select 'learned noise: '||endpoint||' '||json_path from noise_fields where run_id='$RID' order by 1"
 }
-echo; echo "== 2. replay and diff WITH noise learning =="; replay true
-echo; echo "== 3. replay and diff WITHOUT noise learning (shows the false positives) =="; replay false
+FAILED=0
+expect() { # expect <what> <text> <pattern>
+  case "$2" in *"$3"*) ;; *) echo "ASSERTION FAILED: $1 (wanted: $3)"; FAILED=1 ;; esac
+}
 
-echo; echo "== 4. secrets =="
+echo; echo "== 2. replay and diff WITH noise learning =="
+OUT=$(replay true); echo "$OUT"
+expect "3 seeded bugs found, noise filtered out" "$OUT" "breaking=3 additive=4"
+expect "noise was learned" "$OUT" 'learned noise: /users/{id} $.ts'
+
+echo; echo "== 3. replay and diff WITHOUT noise learning (shows the false positives) =="
+OUT=$(replay false); echo "$OUT"
+expect "without noise learning, the noisy fields are false positives" "$OUT" "breaking=13"
+
+echo; echo "== 4. the CLI, as the GitHub Action runs it =="
+RG_BASELINE_URL=http://127.0.0.1:9101 RG_CANDIDATE_URL=http://127.0.0.1:9102 RG_COMMIT_SHA=abc1234 RG_PR_NUMBER=7 \
+  RG_REPORT_FILE="$TMP/report.md" RG_REPLAY_AUTH="Bearer replaytoken" "$TMP/replaygate" run 2>"$TMP/cli.log"
+CLI_EXIT=$?
+echo "exit status: $CLI_EXIT (1 means a regression was found, which is correct here)"
+echo "--- the pull request comment would read: ---"
+cat "$TMP/report.md"
+[ "$CLI_EXIT" = 1 ] || { echo "ASSERTION FAILED: CLI exit status was $CLI_EXIT, wanted 1"; FAILED=1; }
+expect "report names the breaking changes" "$(cat "$TMP/report.md")" "Breaking changes (3)"
+
+echo; echo "== 5. secrets =="
 SECRETS_DB="$(psql_ -U "${POSTGRES_USER:-replaygate}" -d rg_e2e -Atc "select (select count(*) from recorded_requests where headers::text ~ 'prodsecret') + (select count(*) from replay_responses where convert_from(body,'UTF8') ~ 'replaytoken')" 2>&1)"
 case "$SECRETS_DB" in
   ''|*[!0-9]*) echo "tokens found in database: CHECK FAILED -> $SECRETS_DB" ;;
   *) echo "tokens found in database: $SECRETS_DB" ;;
 esac
-echo "tokens found in logs: $(cat "$TMP"/*.log | grep -c -E 'prodsecret|replaytoken')"
+LOG_HITS="$(cat "$TMP"/*.log | grep -c -E 'prodsecret|replaytoken')"
+echo "tokens found in logs: $LOG_HITS"
+[ "$SECRETS_DB" = 0 ] || { echo "ASSERTION FAILED: tokens in the database"; FAILED=1; }
+[ "$LOG_HITS" = 0 ] || { echo "ASSERTION FAILED: tokens in the logs"; FAILED=1; }
 psql_ -d postgres -qc 'DROP DATABASE IF EXISTS rg_e2e' >/dev/null 2>&1
+
+echo
+if [ "$FAILED" = 0 ]; then echo "e2e: all checks passed"; else echo "e2e: FAILED"; exit 1; fi

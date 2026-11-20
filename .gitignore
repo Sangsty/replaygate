@@ -2,6 +2,8 @@
 /bin/
 /api
 /proxy
+/worker
+/replaygate
 *.exe
 
 # Environment: never commit secrets
@@ -17,6 +19,6 @@ coverage.*
 .vscode/
 .DS_Store
 
-# Frontend (later phases)
+# Frontend
 node_modules/
 web/dist/

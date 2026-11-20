@@ -151,8 +151,16 @@ func (a *api) getRun(w http.ResponseWriter, r *http.Request) {
 			a.storeError(w, "load diffs", err)
 			return
 		}
+		if diffs == nil { // encode as [] rather than null
+			diffs = []store.DiffRow{}
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": run, "diffs": diffs})
+	noise, err := a.store.RunNoise(r.Context(), rid)
+	if err != nil {
+		a.storeError(w, "load noise", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"run": run, "diffs": diffs, "noise": noise})
 }
 
 type claimRequest struct {
