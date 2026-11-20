@@ -71,6 +71,20 @@ func waitUpload(t *testing.T, u *recUploader) {
 	}
 }
 
+// eventually polls cond until it is true or two seconds pass. The batcher
+// bumps its counters after Upload returns, so a test that was woken by the fake
+// uploader must wait for them instead of reading them straight away.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func fastCfg() BatcherConfig {
 	return BatcherConfig{BatchSize: 100, FlushInterval: time.Hour, MaxRetries: 3, RetryBase: time.Millisecond, UploadTimeout: time.Second}
 }
@@ -98,9 +112,7 @@ func TestBatcherFlushesWhenBatchIsFull(t *testing.T) {
 	if len(u.batches) != 1 || len(u.batches[0]) != 3 {
 		t.Fatalf("batches = %v, want one batch of 3", u.batches)
 	}
-	if b.Uploaded() != 3 {
-		t.Errorf("Uploaded = %d, want 3", b.Uploaded())
-	}
+	eventually(t, "Uploaded to reach 3", func() bool { return b.Uploaded() == 3 })
 }
 
 func TestBatcherFlushesOnInterval(t *testing.T) {
@@ -163,8 +175,9 @@ func TestBatcherRetriesTransientFailures(t *testing.T) {
 	if got := u.calls.Load(); got != 3 {
 		t.Errorf("upload calls = %d, want 3 (two failures, then success)", got)
 	}
-	if b.Uploaded() != 2 || b.Dropped() != 0 {
-		t.Errorf("uploaded=%d dropped=%d, want 2/0", b.Uploaded(), b.Dropped())
+	eventually(t, "Uploaded to reach 2", func() bool { return b.Uploaded() == 2 })
+	if b.Dropped() != 0 {
+		t.Errorf("dropped = %d, want 0", b.Dropped())
 	}
 }
 

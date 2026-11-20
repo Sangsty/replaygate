@@ -113,3 +113,35 @@ HttpOnly, SameSite=Lax cookie, valid for 24 hours, and can only read. Every
 write endpoint requires the project API key.
 
 Checks: `make web-test` (types and unit tests), `make web-build`.
+
+## Phase 4: evaluation
+
+How good is the gate? `make eval` answers with measurements instead of claims. It
+runs the real API, diff worker, replay workers and gate in one process against a
+scratch Postgres database (`rg_eval`, created and dropped for you), and writes
+`docs/evaluation.md`:
+
+```bash
+make up
+make eval            # about a minute; extra flags: make eval ARGS="-fp-runs 100"
+make bench           # Go micro-benchmarks for the diff engine
+```
+
+What it measures:
+
+1. **Seeded bugs.** A synthetic shop service (`internal/evalapp`) has ten seeded
+   regressions, one per run: field removed, type changed, value changed, status
+   changed, nested field removed, array truncated, null introduced, field
+   renamed, precision lost, error on an edge-case query. A bug is *caught* when
+   the check fails and *named* when the report lists the right endpoint, kind and
+   path. Two safe changes (an added field, reordered keys) must not fail.
+2. **False alarms.** The same build is compared with itself, with and without
+   noise learning, and with a field that flips rarely. The report gives the rate
+   with a 95% Wilson interval.
+3. **Throughput.** A clean check of 1,000 and 10,000 recorded requests: three
+   replays each, stored and diffed.
+
+The numbers describe the machine and setup written at the top of
+`docs/evaluation.md`; read its "Limits" section before quoting them. The Go test
+`TestEvaluationEndToEnd` runs a small version of all of this in CI, so a change
+that stops the gate catching one of the ten bugs cannot merge.

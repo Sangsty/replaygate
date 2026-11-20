@@ -1,0 +1,321 @@
+{
+  "env": {
+    "when": "2026-11-20T11:25:02.081552082Z",
+    "go": "go1.24.7",
+    "os": "linux",
+    "arch": "amd64",
+    "cpus": 12,
+    "postgres": "PostgreSQL 16.16",
+    "concurrency": 8
+  },
+  "config": {
+    "DetectRuns": 3,
+    "FPRuns": 50,
+    "Rare": 0.01,
+    "BenchSizes": [
+      1000,
+      10000
+    ],
+    "Bugs": [
+      {
+        "Name": "field_removed",
+        "Description": "users: email dropped for every 7th id",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_removed",
+        "PathHas": "email"
+      },
+      {
+        "Name": "type_changed",
+        "Description": "users: age becomes a string for every 5th id",
+        "Endpoint": "/users/{id}",
+        "Kind": "type_changed",
+        "PathHas": "age"
+      },
+      {
+        "Name": "value_changed",
+        "Description": "orders: total inflated by 18% (tax applied twice)",
+        "Endpoint": "/orders/{id}",
+        "Kind": "value_changed",
+        "PathHas": "total"
+      },
+      {
+        "Name": "status_changed",
+        "Description": "products: 500 instead of 200 for every 11th id",
+        "Endpoint": "/products/{id}",
+        "Kind": "status_changed",
+        "PathHas": ""
+      },
+      {
+        "Name": "nested_field_removed",
+        "Description": "orders: items[1].sku dropped for every 4th id",
+        "Endpoint": "/orders/{id}",
+        "Kind": "field_removed",
+        "PathHas": "sku"
+      },
+      {
+        "Name": "array_truncated",
+        "Description": "search: last result dropped and count lowered",
+        "Endpoint": "/search",
+        "Kind": "field_removed",
+        "PathHas": "results"
+      },
+      {
+        "Name": "null_introduced",
+        "Description": "products: rating becomes null for every 6th id",
+        "Endpoint": "/products/{id}",
+        "Kind": "type_changed",
+        "PathHas": "rating"
+      },
+      {
+        "Name": "field_renamed",
+        "Description": "users: name renamed to full_name",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_removed",
+        "PathHas": "name"
+      },
+      {
+        "Name": "precision_loss",
+        "Description": "products: price rounded to one decimal place",
+        "Endpoint": "/products/{id}",
+        "Kind": "value_changed",
+        "PathHas": "price"
+      },
+      {
+        "Name": "error_on_long_query",
+        "Description": "search: 500 when q is longer than 8 characters",
+        "Endpoint": "/search",
+        "Kind": "status_changed",
+        "PathHas": ""
+      }
+    ],
+    "Benign": [
+      {
+        "Name": "additive_field",
+        "Description": "users: new optional field nickname",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_added",
+        "PathHas": "nickname"
+      },
+      {
+        "Name": "key_order",
+        "Description": "all routes: keys serialised in a different order, pretty-printed",
+        "Endpoint": "",
+        "Kind": "",
+        "PathHas": ""
+      }
+    ]
+  },
+  "bugs": [
+    {
+      "spec": {
+        "Name": "field_removed",
+        "Description": "users: email dropped for every 7th id",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_removed",
+        "PathHas": "email"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "type_changed",
+        "Description": "users: age becomes a string for every 5th id",
+        "Endpoint": "/users/{id}",
+        "Kind": "type_changed",
+        "PathHas": "age"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "value_changed",
+        "Description": "orders: total inflated by 18% (tax applied twice)",
+        "Endpoint": "/orders/{id}",
+        "Kind": "value_changed",
+        "PathHas": "total"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "status_changed",
+        "Description": "products: 500 instead of 200 for every 11th id",
+        "Endpoint": "/products/{id}",
+        "Kind": "status_changed",
+        "PathHas": ""
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "nested_field_removed",
+        "Description": "orders: items[1].sku dropped for every 4th id",
+        "Endpoint": "/orders/{id}",
+        "Kind": "field_removed",
+        "PathHas": "sku"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "array_truncated",
+        "Description": "search: last result dropped and count lowered",
+        "Endpoint": "/search",
+        "Kind": "field_removed",
+        "PathHas": "results"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "null_introduced",
+        "Description": "products: rating becomes null for every 6th id",
+        "Endpoint": "/products/{id}",
+        "Kind": "type_changed",
+        "PathHas": "rating"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "field_renamed",
+        "Description": "users: name renamed to full_name",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_removed",
+        "PathHas": "name"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "precision_loss",
+        "Description": "products: price rounded to one decimal place",
+        "Endpoint": "/products/{id}",
+        "Kind": "value_changed",
+        "PathHas": "price"
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    },
+    {
+      "spec": {
+        "Name": "error_on_long_query",
+        "Description": "search: 500 when q is longer than 8 characters",
+        "Endpoint": "/search",
+        "Kind": "status_changed",
+        "PathHas": ""
+      },
+      "runs": 3,
+      "detected": 3,
+      "located": 3
+    }
+  ],
+  "benign": [
+    {
+      "spec": {
+        "Name": "additive_field",
+        "Description": "users: new optional field nickname",
+        "Endpoint": "/users/{id}",
+        "Kind": "field_added",
+        "PathHas": "nickname"
+      },
+      "runs": 3,
+      "passed": 3,
+      "findings": 180
+    },
+    {
+      "spec": {
+        "Name": "key_order",
+        "Description": "all routes: keys serialised in a different order, pretty-printed",
+        "Endpoint": "",
+        "Kind": "",
+        "PathHas": ""
+      },
+      "runs": 3,
+      "passed": 3,
+      "findings": 0
+    }
+  ],
+  "false_positives": [
+    {
+      "label": "noise learning off",
+      "noise_learning": false,
+      "rare_noise": 0,
+      "runs": 50,
+      "failed": 50,
+      "errored": 0,
+      "ci95_low": 0.9286523998213858,
+      "ci95_high": 0.9999999999999998,
+      "mean_breaking_per_run": 269.14,
+      "mean_latency_per_run": 0,
+      "runs_with_latency_findings": 0
+    },
+    {
+      "label": "noise learning on",
+      "noise_learning": true,
+      "rare_noise": 0,
+      "runs": 50,
+      "failed": 0,
+      "errored": 0,
+      "ci95_low": 0,
+      "ci95_high": 0.07134760017861413,
+      "mean_breaking_per_run": 0,
+      "mean_latency_per_run": 0,
+      "runs_with_latency_findings": 0
+    },
+    {
+      "label": "noise learning on, plus a field that flips 1.0% of the time",
+      "noise_learning": true,
+      "rare_noise": 0.01,
+      "runs": 50,
+      "failed": 4,
+      "errored": 0,
+      "ci95_low": 0.03154951386931146,
+      "ci95_high": 0.1883824702807244,
+      "mean_breaking_per_run": 0.08,
+      "mean_latency_per_run": 0,
+      "runs_with_latency_findings": 0
+    }
+  ],
+  "throughput": [
+    {
+      "requests": 1000,
+      "replays": 3000,
+      "total_ns": 1565260727,
+      "replay_ns": 1437105570,
+      "diff_ns": 128155157,
+      "replays_per_second": 1916.6136019715007,
+      "verdict": "passed",
+      "breaking": 0,
+      "latency_findings": 0
+    },
+    {
+      "requests": 10000,
+      "replays": 30000,
+      "total_ns": 13589119222,
+      "replay_ns": 12781533053,
+      "diff_ns": 807586169,
+      "replays_per_second": 2207.6485981101505,
+      "verdict": "passed",
+      "breaking": 0,
+      "latency_findings": 0
+    }
+  ]
+}

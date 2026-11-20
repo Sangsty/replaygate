@@ -2,7 +2,7 @@
 -include .env
 export
 
-.PHONY: up down fmt vet test api proxy worker gate bootstrap web-install web-dev web-test web-build
+.PHONY: up down fmt vet test api proxy worker gate bootstrap eval bench web-install web-dev web-test web-build
 
 up:            ## Start Postgres and wait until it is healthy
 	docker compose up -d --wait postgres
@@ -33,6 +33,12 @@ gate:          ## Run the regression gate by hand (needs RG_BASELINE_URL and RG_
 
 bootstrap:     ## Create a dev project and print its API key once (make bootstrap NAME=demo OWNER=<github login>)
 	go run ./cmd/api bootstrap -name $(or $(NAME),demo) $(if $(OWNER),-owner $(OWNER),)
+
+eval:          ## Measure detection, false alarms and throughput; writes docs/evaluation.md (make eval ARGS="-fp-runs 100")
+	bash scripts/eval.sh $(ARGS)
+
+bench:         ## Go micro-benchmarks for the diff engine
+	go test -run xxx -bench . -benchmem ./internal/diff
 
 web-install:   ## Install dashboard dependencies
 	cd web && npm ci
