@@ -27,6 +27,7 @@ const (
 )
 
 type fakeStore struct {
+	runsFake
 	mu        sync.Mutex
 	keys      map[string]string
 	cfg       store.ProjectConfig

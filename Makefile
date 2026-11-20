@@ -2,7 +2,7 @@
 -include .env
 export
 
-.PHONY: up down fmt vet test api proxy bootstrap
+.PHONY: up down fmt vet test api proxy worker bootstrap
 
 up:            ## Start Postgres and wait until it is healthy
 	docker compose up -d --wait postgres
@@ -25,5 +25,8 @@ api:           ## Run the API server (applies migrations on start)
 proxy:         ## Run the recorder proxy
 	go run ./cmd/proxy
 
-bootstrap:     ## Create a dev project and print its API key once
-	go run ./cmd/api bootstrap $(NAME)
+worker:        ## Run a replay worker (set RG_VARIANT and RG_TARGET_URL)
+	go run ./cmd/worker
+
+bootstrap:     ## Create a dev project and print its API key once (make bootstrap NAME=demo)
+	go run ./cmd/api bootstrap -name $(or $(NAME),demo)

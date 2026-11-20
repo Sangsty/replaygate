@@ -33,6 +33,13 @@ type Store interface {
 	ProjectByAPIKey(ctx context.Context, plaintext string) (projectID string, err error)
 	ProjectConfig(ctx context.Context, projectID string) (store.ProjectConfig, error)
 	IngestRequests(ctx context.Context, projectID string, reqs []model.RecordedRequest) (int, error)
+
+	CreateRun(ctx context.Context, p store.CreateRunParams) (store.Run, int, error)
+	GetRun(ctx context.Context, projectID, runID string) (store.Run, error)
+	RunDiffs(ctx context.Context, runID string, limit int) ([]store.DiffRow, error)
+	ClaimReplayJob(ctx context.Context, projectID, variant, workerID string, lease time.Duration) (*store.ReplayJob, error)
+	CompleteReplayJob(ctx context.Context, projectID string, jobID int64, workerID string, results []store.ReplayResult) error
+	FailReplayJob(ctx context.Context, projectID string, jobID int64, workerID, msg string) (bool, error)
 }
 
 type api struct {
@@ -55,6 +62,13 @@ func New(st Store, log *slog.Logger) http.Handler {
 		r.Use(a.requireProjectKey)
 		r.Get("/config", a.getConfig)
 		r.Post("/ingest", a.ingest)
+
+		r.Post("/runs", a.createRun)
+		r.Get("/runs/{rid}", a.getRun)
+
+		r.Post("/jobs/claim", a.claimJob)
+		r.Post("/jobs/{jid}/complete", a.completeJob)
+		r.Post("/jobs/{jid}/fail", a.failJob)
 	})
 	return r
 }

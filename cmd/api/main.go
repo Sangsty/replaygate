@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Sangsty/replaygate/internal/config"
+	"github.com/Sangsty/replaygate/internal/diffworker"
 	"github.com/Sangsty/replaygate/internal/server"
 	"github.com/Sangsty/replaygate/internal/store"
 )
@@ -68,6 +69,11 @@ func serve(log *slog.Logger) error {
 	if err := store.Migrate(ctx, st.Pool()); err != nil {
 		return err
 	}
+
+	// The diff worker runs in this process: it only reads and writes Postgres,
+	// so it needs no network access of its own.
+	dw := &diffworker.Worker{Store: st, Log: log, ID: fmt.Sprintf("api-%d", os.Getpid())}
+	go dw.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              addr,
