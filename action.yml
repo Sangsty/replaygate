@@ -8,6 +8,13 @@ branding:
   color: blue
 
 inputs:
+  version:
+    description: >
+      A released version to download, e.g. v0.1.0. It is checked against the
+      release's SHA-256 checksums. Leave empty to build from source instead,
+      which needs no release but adds 30-60 seconds.
+    required: false
+    default: ""
   api-url:
     description: Address of your replaygate API, e.g. https://replaygate.example.com
     required: true
@@ -50,7 +57,9 @@ inputs:
     required: false
     default: "true"
   github-token:
-    description: Token used to post the comment. The workflow needs `pull-requests: write`.
+    description: >
+      Token used to post the comment. The workflow needs the permission
+      pull-requests write.
     required: false
     default: ${{ github.token }}
 
@@ -71,14 +80,27 @@ outputs:
 runs:
   using: composite
   steps:
-    # The tool is built from source for now. This installs Go next to whatever
-    # the workflow already uses; a prebuilt binary download replaces it later.
+    # With `version`, download a prebuilt binary and verify its checksum.
+    - name: Install replaygate
+      if: inputs.version != ''
+      shell: bash
+      run: bash "$ACTION_PATH/scripts/install-gate.sh"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        RG_REPO: ${{ github.action_repository }}
+        RG_VERSION: ${{ inputs.version }}
+        RG_DEST: ${{ runner.temp }}/replaygate
+
+    # Without it, build from source. This installs Go next to whatever the
+    # workflow already uses.
     - uses: actions/setup-go@v5
+      if: inputs.version == ''
       with:
         go-version-file: ${{ github.action_path }}/go.mod
         cache: false
 
     - name: Build replaygate
+      if: inputs.version == ''
       shell: bash
       run: go build -C "$ACTION_PATH" -trimpath -o "$RUNNER_TEMP/replaygate" ./cmd/replaygate
       env:

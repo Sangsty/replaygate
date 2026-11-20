@@ -47,6 +47,7 @@ jobs:
 
       - uses: Sangsty/replaygate@main # pin a tag or commit SHA for stability
         with:
+          # version: v0.1.0   # download this release (checksum-verified) instead of building from source
           api-url: ${{ vars.REPLAYGATE_API_URL }}
           project-id: ${{ vars.REPLAYGATE_PROJECT_ID }}
           api-key: ${{ secrets.REPLAYGATE_API_KEY }}

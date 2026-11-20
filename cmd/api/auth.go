@@ -12,9 +12,10 @@ import (
 )
 
 // authFromEnv builds the dashboard sign-in configuration. It returns nil when
-// none of the sign-in variables are set (sign-in is then off), and an error
-// when only some are, because a half-configured login is a mistake that
-// should stop the server, not silently disable the dashboard.
+// none of the three secrets (client id, client secret, JWT secret) is set, so
+// sign-in is off, and an error when only some of the four settings are,
+// because a half-configured login is a mistake that should stop the server,
+// not silently disable the dashboard.
 //
 //	RG_GITHUB_CLIENT_ID, RG_GITHUB_CLIENT_SECRET  from the GitHub OAuth app
 //	RG_JWT_SECRET    at least 32 bytes of random data (openssl rand -base64 48)
@@ -28,16 +29,18 @@ import (
 func authFromEnv(getenv func(string) string) (*server.AuthConfig, error) {
 	names := []string{"RG_GITHUB_CLIENT_ID", "RG_GITHUB_CLIENT_SECRET", "RG_JWT_SECRET", "RG_PUBLIC_URL"}
 	vals := map[string]string{}
-	var set, missing []string
+	var missing []string
 	for _, n := range names {
 		if v := strings.TrimSpace(getenv(n)); v != "" {
 			vals[n] = v
-			set = append(set, n)
 		} else {
 			missing = append(missing, n)
 		}
 	}
-	if len(set) == 0 {
+	// RG_PUBLIC_URL alone does not turn sign-in on: deployments always set it
+	// (it is the server's own address), long before there is an OAuth app. Only
+	// the three secrets decide, and then everything must be present.
+	if vals["RG_GITHUB_CLIENT_ID"] == "" && vals["RG_GITHUB_CLIENT_SECRET"] == "" && vals["RG_JWT_SECRET"] == "" {
 		return nil, nil
 	}
 	if len(missing) > 0 {

@@ -1,0 +1,13 @@
+.git
+.github
+**/node_modules
+web/dist
+docs
+*.zip
+.env
+.env.*
+!.env.example
+/api
+/proxy
+/worker
+/replaygate

@@ -5,8 +5,42 @@ proxy, replay it against the baseline (main) and candidate (PR) builds, diff
 the responses, and fail the pull request with a readable report when a
 breaking change is found.
 
-> Status: Phase 3 (GitHub Action and CLI, PR comments, GitHub sign-in, dashboard).
-> Evaluation, benchmarks, deployment and the architecture write-up follow in Phase 4.
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph prod["1. Record: your production service"]
+    live["Your service"] --> proxy["replaygate proxy<br/>sanitizes, records GETs"]
+  end
+
+  subgraph srv["replaygate server (one EC2 box)"]
+    direction LR
+    caddy["Caddy<br/>HTTPS + dashboard"] --> api["replaygate API"]
+    api --> pg[("Postgres<br/>SKIP LOCKED queue")]
+    api --> diffw["diff worker<br/>noise learning"]
+  end
+
+  subgraph ci["2. Replay: your CI, on each pull request"]
+    cli["replaygate CLI<br/>(GitHub Action)"] --> workers["replay workers<br/>main x2, PR x1"]
+    workers --> builds["main build<br/>PR build"]
+  end
+
+  proxy -->|"sanitized requests"| api
+  cli -->|"create run, read verdict"| api
+  workers -->|"claim, upload"| api
+  cli -->|"3. Report"| gh["PR comment + check"]
+  dev["You: GitHub sign-in"] --> caddy
+```
+
+How a check works: the proxy records sanitized production GETs. On a pull request
+the Action replays the most frequent ones three times: against `main` twice and
+against the PR once. Fields that differ between the two `main` replays (timestamps,
+request ids, etags) are learned as noise and ignored. Everything else that differs
+between `main` and the PR is a finding, ranked breaking, additive or latency, and
+the check fails on breaking ones with a report on the PR. Credentials for the
+services under test stay on the CI runner and are never uploaded.
+
+> Status: Phase 4 (evaluation in `docs/evaluation.md`, deployment in `deploy/README.md`).
 
 ## Quick start
 
@@ -145,3 +179,20 @@ The numbers describe the machine and setup written at the top of
 `docs/evaluation.md`; read its "Limits" section before quoting them. The Go test
 `TestEvaluationEndToEnd` runs a small version of all of this in CI, so a change
 that stops the gate catching one of the ten bugs cannot merge.
+
+## Phase 4b: deploy and release
+
+- **Server:** `deploy/README.md` is the step-by-step guide for one EC2 box:
+  Postgres, the API and Caddy (automatic HTTPS) in Docker Compose
+  (`docker-compose.prod.yml`). `deploy/init-env.sh` generates the secrets and
+  `deploy/compose.sh` wraps the compose command.
+- **Demo data:** `scripts/seed-demo.sh` records traffic from a demo service into
+  your server and runs one failing and one passing check, so the dashboard is
+  not empty.
+- **Release binary:** pushing a tag such as `v0.1.0` runs `.github/workflows/release.yml`,
+  which publishes `replaygate` for linux and macOS (amd64, arm64) with a
+  `checksums.txt`. The Action downloads it and verifies the SHA-256 when given
+  `version: v0.1.0`; without `version` it builds from source, as before.
+- **Checks:** `scripts/test-install-gate.sh` tests the installer (checksum
+  mismatch, hostile version strings), and `scripts/check-yaml.py` validates the
+  Action and workflow files, both in CI.

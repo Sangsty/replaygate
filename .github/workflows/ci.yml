@@ -35,6 +35,10 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test -race -count=1 ./...
+      - name: release installer
+        run: bash scripts/test-install-gate.sh
+      - name: workflow and action YAML
+        run: pip install pyyaml && python3 scripts/check-yaml.py
 
   web:
     runs-on: ubuntu-latest

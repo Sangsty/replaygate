@@ -21,6 +21,17 @@ func TestAuthFromEnv(t *testing.T) {
 		t.Errorf("nothing set: cfg=%v err=%v, want sign-in off", cfg, err)
 	}
 
+	// The server's own address is set in every deployment, including the ones
+	// that have no OAuth app yet; on its own it must not switch sign-in on.
+	for _, m := range []map[string]string{
+		{"RG_PUBLIC_URL": "https://rg.example.com"},
+		{"RG_PUBLIC_URL": "https://rg.example.com", "RG_GITHUB_CLIENT_ID": "", "RG_GITHUB_CLIENT_SECRET": " ", "RG_JWT_SECRET": ""},
+	} {
+		if cfg, err := authFromEnv(env(m)); cfg != nil || err != nil {
+			t.Errorf("only RG_PUBLIC_URL set: cfg=%v err=%v, want sign-in off and no error", cfg, err)
+		}
+	}
+
 	cfg, err := authFromEnv(env(full()))
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +81,15 @@ func TestAuthFromEnvRejectsBadConfig(t *testing.T) {
 		want   string
 	}{
 		{"partly configured", func(m map[string]string) { delete(m, "RG_PUBLIC_URL"); delete(m, "RG_JWT_SECRET") }, "RG_JWT_SECRET, RG_PUBLIC_URL"},
+		{"only the client id", func(m map[string]string) {
+			delete(m, "RG_GITHUB_CLIENT_SECRET")
+			delete(m, "RG_JWT_SECRET")
+		}, "RG_GITHUB_CLIENT_SECRET, RG_JWT_SECRET"},
+		{"only the jwt secret", func(m map[string]string) {
+			delete(m, "RG_GITHUB_CLIENT_ID")
+			delete(m, "RG_GITHUB_CLIENT_SECRET")
+		}, "RG_GITHUB_CLIENT_ID, RG_GITHUB_CLIENT_SECRET"},
+		{"secrets without a public url", func(m map[string]string) { delete(m, "RG_PUBLIC_URL") }, "RG_PUBLIC_URL"},
 		{"short secret", func(m map[string]string) { m["RG_JWT_SECRET"] = "short" }, "RG_JWT_SECRET"},
 		{"relative public url", func(m map[string]string) { m["RG_PUBLIC_URL"] = "rg.example.com" }, "RG_PUBLIC_URL"},
 		{"bad dashboard url", func(m map[string]string) { m["RG_DASHBOARD_URL"] = "/app" }, "RG_DASHBOARD_URL"},
