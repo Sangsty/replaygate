@@ -34,3 +34,6 @@ ENV
 echo "wrote $out (readable only by you)"
 echo "dashboard address:  https://$host"
 echo "GitHub OAuth callback to register:  https://$host/auth/github/callback"
+echo
+echo "Next: create the GitHub OAuth app, then put its client id and secret into $out"
+echo "BEFORE starting the stack (the API refuses to start with a JWT secret but no OAuth app)."

@@ -68,34 +68,42 @@ Connect again (the group change needs a new login), then:
 git clone https://github.com/Sangsty/replaygate.git && cd replaygate
 ```
 
-## 3. Configure and start
+## 3. Configure
 
 ```bash
 bash deploy/init-env.sh <IP>          # writes .env.prod with generated secrets
-deploy/compose.sh up -d --build       # first build takes 5-10 minutes
-deploy/compose.sh ps                  # three services; api and postgres "healthy"
-curl -s https://<IP-with-dashes>.sslip.io/healthz
 ```
-`init-env.sh` prints the dashboard address (your IP with dashes plus
-`.sslip.io`) and the OAuth callback URL. Caddy asks Let's Encrypt for a
-certificate the first time someone visits; if `curl` fails once, wait a
-minute and retry (`deploy/compose.sh logs web` shows progress).
+It prints the dashboard address (your IP with dashes plus `.sslip.io`) and the
+OAuth callback URL.
 
-## 4. Dashboard sign-in
+Create the GitHub OAuth app **before** starting the stack, because the API
+refuses to start with a JWT secret but no OAuth app:
 
 1. https://github.com/settings/developers > OAuth Apps > New OAuth App.
-   Homepage URL: `https://<host>`. Authorization callback URL: `https://<host>/auth/github/callback`.
-2. Generate a client secret and copy the client id and secret into `.env.prod`:
+   Homepage URL: `https://<host>`. Redirect URI: `https://<host>/auth/github/callback`.
+   Leave wildcard matching and device flow off.
+2. Generate a client secret (GitHub shows it once) and put the client id and
+   secret into `.env.prod`:
    ```bash
    nano .env.prod        # fill RG_GITHUB_CLIENT_ID and RG_GITHUB_CLIENT_SECRET
-   deploy/compose.sh up -d
    ```
-3. Create your project and give your GitHub account access:
-   ```bash
-   deploy/compose.sh run --rm api bootstrap -name replaygate-demo -owner <your-github-login>
-   ```
-   It prints `RG_PROJECT_ID` and `RG_API_KEY` once. Save the key (a password
-   manager, or a GitHub secret); only its hash is stored.
+
+## 4. Start and create your project
+
+```bash
+deploy/compose.sh up -d --build       # first build takes 5-10 minutes
+deploy/compose.sh ps                  # api and postgres "healthy"
+curl -s https://<IP-with-dashes>.sslip.io/healthz
+```
+Caddy asks Let's Encrypt for a certificate on the first visit; if `curl` fails
+once, wait a minute and retry (`deploy/compose.sh logs web` shows progress).
+
+Create your project and give your GitHub account access:
+```bash
+deploy/compose.sh run --rm api bootstrap -name replaygate-demo -owner <your-github-login>
+```
+It prints `RG_PROJECT_ID` and `RG_API_KEY` once. Save the key (a password
+manager, or a GitHub secret); only its hash is stored.
 
 ## 5. Put demo data in
 
