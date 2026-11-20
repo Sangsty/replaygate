@@ -1,0 +1,22 @@
+# Binaries
+/bin/
+/api
+/proxy
+*.exe
+
+# Environment: never commit secrets
+.env
+.env.*
+!.env.example
+
+# Tooling
+*.test
+*.out
+coverage.*
+.idea/
+.vscode/
+.DS_Store
+
+# Frontend (later phases)
+node_modules/
+web/dist/
