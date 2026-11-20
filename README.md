@@ -40,6 +40,14 @@ between `main` and the PR is a finding, ranked breaking, additive or latency, an
 the check fails on breaking ones with a report on the PR. Credentials for the
 services under test stay on the CI runner and are never uploaded.
 
+Latency is judged per endpoint, not per request. The median candidate latency
+is compared with the median baseline latency, and an endpoint is only judged when
+at least 5 requests to it were replayed (`latency.min_samples`, default 5), so one
+slow response is never a finding. The default thresholds are a ratio of 1.5 and a
+difference of at least 50 ms. Latency findings are reported but never fail a check
+unless you add `latency` to `fail_on`. Endpoints with fewer than 5 replayed
+requests are not judged at all.
+
 > Status: Phase 4 (evaluation in `docs/evaluation.md`, deployment in `deploy/README.md`).
 
 ## Demo
@@ -53,7 +61,7 @@ Action comments on the PR with what changed
 The same run in the dashboard, with findings grouped by severity and the fields
 learned as noise collapsed at the bottom:
 
-![The dashboard run page: three breaking changes, four additive, one latency](docs/images/dashboard-run.png)
+![The dashboard run page: three breaking changes and four additive, no latency findings](docs/images/dashboard-run.png)
 
 ## Quick start
 
